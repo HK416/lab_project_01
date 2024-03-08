@@ -140,7 +140,7 @@ impl PerspectiveCameraBuilder {
             near_z: self.near_z, 
             far_z: self.far_z, 
             uniform_buffer, 
-            bind_group, 
+            uniform_bind_group: bind_group, 
         };
         camera.update_resource(queue);
 
@@ -161,8 +161,8 @@ pub struct PerspectiveCamera {
     aspect_ratio: f32, 
     near_z: f32, 
     far_z: f32, 
-    pub uniform_buffer: wgpu::Buffer, 
-    pub bind_group: wgpu::BindGroup, 
+    uniform_buffer: wgpu::Buffer, 
+    pub uniform_bind_group: wgpu::BindGroup, 
 }
 
 impl GameObject for PerspectiveCamera {
@@ -198,11 +198,6 @@ impl GameCameraObject for PerspectiveCamera {
 }
 
 impl ShaderResource for PerspectiveCamera {
-    #[inline]
-    fn bind_group_ref(&self) -> &wgpu::BindGroup {
-        &self.bind_group
-    }
-
     #[inline]
     fn update_resource(&self, queue: &wgpu::Queue) {
         let data = CameraUniformLayout {

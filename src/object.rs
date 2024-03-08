@@ -186,7 +186,7 @@ impl StdObjectBuilder {
 
         let bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                label: Some("BindGroup(Uniform(Object))"), 
+                label: Some("BindGroup(Object)"), 
                 layout: bind_group_layout, 
                 entries: &[
                     wgpu::BindGroupEntry {
@@ -206,7 +206,7 @@ impl StdObjectBuilder {
                 self.translation
             ), 
             uniform_buffer, 
-            bind_group 
+            uniform_bind_group: bind_group 
         };
         object.update_resource(queue);
 
@@ -222,10 +222,10 @@ impl StdObjectBuilder {
 /// 
 #[derive(Debug)]
 pub struct StdObject {
-    pub color: glam::Vec3, 
-    pub transform: glam::Mat4, 
-    pub uniform_buffer: wgpu::Buffer, 
-    pub bind_group: wgpu::BindGroup, 
+    color: glam::Vec3, 
+    transform: glam::Mat4, 
+    uniform_buffer: wgpu::Buffer, 
+    pub uniform_bind_group: wgpu::BindGroup, 
 }
 
 impl GameObject for StdObject {
@@ -241,11 +241,6 @@ impl GameObject for StdObject {
 }
 
 impl ShaderResource for StdObject {
-    #[inline]
-    fn bind_group_ref(&self) -> &wgpu::BindGroup {
-        &self.bind_group
-    }
-
     #[inline]
     fn update_resource(&self, queue: &wgpu::Queue) {
         let data = ObjectUniformLayout {

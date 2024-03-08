@@ -5,6 +5,5 @@
 /// This is the trait used by the shader resource. </br>
 /// 
 pub trait ShaderResource {
-    fn bind_group_ref(&self) -> &wgpu::BindGroup;
     fn update_resource(&self, queue: &wgpu::Queue);
 }

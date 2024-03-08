@@ -1,4 +1,5 @@
 mod camera;
+mod light;
 mod mesh;
 mod object;
 mod pipeline;
@@ -18,9 +19,14 @@ use winit::{
 };
 
 use camera::PerspectiveCameraBuilder;
+use light::GlobalLightBuilder;
 use mesh::{ModelMesh, CubeMesh, PlaneMesh};
 use object::StdObjectBuilder;
 use resource::ShaderResource;
+
+use crate::light::LightObject;
+use crate::object::GameObject;
+
 
 /// #### 한국어 </br>
 /// 현재 애플리케이션이 실행 중인 경우 `true`값을 가집니다. </br>
@@ -52,7 +58,7 @@ fn render_loop(
     // (English Translation) Create a camera bind group layout.
     let camera_bind_group_layout = device.create_bind_group_layout(
         &wgpu::BindGroupLayoutDescriptor {
-            label: Some("BindGroupLayout(Uniform(Camera))"), 
+            label: Some("BindGroupLayout(Camera)"), 
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0, 
@@ -73,15 +79,15 @@ fn render_loop(
     let mut camera = PerspectiveCameraBuilder::new()
         .set_width(window.inner_size().width as f32)
         .set_height(window.inner_size().height as f32)
-        .set_translation((0.0, 5.5, 5.0).into())
-        .set_rotation(glam::Quat::from_rotation_x(-45.0f32.to_radians()))
+        .set_translation((0.0, 3.5, 8.0).into())
+        .set_rotation(glam::Quat::from_rotation_x(-15.0f32.to_radians()))
         .build(&camera_bind_group_layout, &device, &queue);
 
     // (한국어) 오브젝트 바인드 그룹 레이아웃을 생성합니다.
     // (English Translation) Create a object bind group layout. 
     let object_bind_group_layout = device.create_bind_group_layout(
         &wgpu::BindGroupLayoutDescriptor {
-            label: Some("BindGroupLayout(Uniform(Object))"), 
+            label: Some("BindGroupLayout(Object)"), 
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0, 
@@ -139,10 +145,69 @@ fn render_loop(
         .build(&object_bind_group_layout, &device, &queue);
     cubes.push(blue_cube);
 
+    // (한국어) 전역 조명 바인드 그룹을 생성합니다. 
+    // (English Translation) Create a global light bind group layout.
+    let global_light_bind_group_layout = device.create_bind_group_layout(
+        &wgpu::BindGroupLayoutDescriptor {
+            label: Some("BindGroupLayout(GlobalLight)"), 
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0, 
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT, 
+                    ty: wgpu::BindingType::Buffer { 
+                        ty: wgpu::BufferBindingType::Uniform, 
+                        has_dynamic_offset: false, 
+                        min_binding_size: None 
+                    }, 
+                    count: None, 
+                }, 
+            ], 
+        }, 
+    );
+
+    let shadow_map_bind_group_layout = device.create_bind_group_layout(
+        &wgpu::BindGroupLayoutDescriptor {
+            label: Some("BindGroupLayout(ShadowMap)"), 
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0, 
+                    visibility: wgpu::ShaderStages::FRAGMENT, 
+                    ty: wgpu::BindingType::Texture { 
+                        sample_type: wgpu::TextureSampleType::Depth, 
+                        view_dimension: wgpu::TextureViewDimension::D2, 
+                        multisampled: false 
+                    }, 
+                    count: None, 
+                }, 
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1, 
+                    visibility: wgpu::ShaderStages::FRAGMENT, 
+                    ty: wgpu::BindingType::Sampler(
+                        wgpu::SamplerBindingType::Comparison, 
+                    ), 
+                    count: None, 
+                }, 
+            ], 
+        }, 
+    );
+
+    // (한국어) 전역 조명을 생성합니다.
+    // (English Translation) Creates global light.
+    let global_light = GlobalLightBuilder::new()
+        .set_translation((0.0, 5.0, 0.0).into())
+        .set_rotation(glam::Quat::from_rotation_x(-90.0f32.to_radians()))
+        .set_light_color((1.0, 1.0, 1.0).into())
+        .build(&global_light_bind_group_layout, &shadow_map_bind_group_layout, &device, &queue);
+
     // (한국어) 색상 그래픽스 파이프라인을 생성합니다.
     // (English Translation) Create a color graphics pipeline.
-    let bind_group_layouts = &[&camera_bind_group_layout, &object_bind_group_layout];
+    let bind_group_layouts = &[&camera_bind_group_layout, &object_bind_group_layout, &global_light_bind_group_layout, &shadow_map_bind_group_layout];
     let color_pipeline = pipeline::create_colored_pipeline(&device, bind_group_layouts);
+
+    // (한국어) 그림자 맵 생성 파이프라인을 생성합니다.
+    // (English Translation) Create a shadow map generation pipeline.
+    let bind_group_layouts = &[&global_light_bind_group_layout, &object_bind_group_layout];
+    let shadow_pipeline = pipeline::create_shadow_pipeline(&device, bind_group_layouts);
 
     // (한국어) 스왑체인 및 프레임 버퍼를 설정합니다.
     // (English Translation) Sets the swapchain and frame buffer. 
@@ -230,6 +295,21 @@ fn render_loop(
                             });
                         }
                     },
+                    WindowEvent::KeyboardInput { event, .. } => {
+                        if let PhysicalKey::Code(code) = event.physical_key {
+                            if KeyCode::ArrowLeft == code && event.state.is_pressed() {
+                                let rot = glam::Mat4::from_quat(glam::Quat::from_rotation_y(-180.0f32.to_radians() * timer.elapsed_time_sec()));
+                                *camera.world_transform_mut() = rot.mul_mat4(camera.world_transform_ref());
+                                camera.update_resource(&queue);
+                            }
+
+                            if KeyCode::ArrowRight == code && event.state.is_pressed() {
+                                let rot = glam::Mat4::from_quat(glam::Quat::from_rotation_y(180.0f32.to_radians() * timer.elapsed_time_sec()));
+                                *camera.world_transform_mut() = rot.mul_mat4(camera.world_transform_ref());
+                                camera.update_resource(&queue);
+                            }
+                        }
+                    }
                     _ => { /*--- empty ---*/ }
                 },
                 _ => { /*--- empty ---*/ }
@@ -261,16 +341,48 @@ fn render_loop(
         {
             let mut rpass = encoder.begin_render_pass(
                 &wgpu::RenderPassDescriptor {
-                    label: Some("RenderPass(Test)"), 
+                    label: Some("RenderPass(Shadow)"), 
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &global_light.texture_view_ref(), 
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0), 
+                            store: wgpu::StoreOp::Store, 
+                        }), 
+                        stencil_ops: None, 
+                    }), 
+                    timestamp_writes: None, 
+                    occlusion_query_set: None, 
+                },
+            );
+
+            rpass.set_pipeline(&shadow_pipeline);
+            rpass.set_bind_group(0, &global_light.uniform_bind_group, &[]);
+
+            plane_mesh.bind(&mut rpass);
+            rpass.set_bind_group(1, &plane.uniform_bind_group, &[]);
+            plane_mesh.draw(&mut rpass);
+
+            cube_mesh_0.bind(&mut rpass);
+            for object in cubes.iter() {
+                rpass.set_bind_group(1, &object.uniform_bind_group, &[]);
+                cube_mesh_0.draw(&mut rpass);
+            }
+        }
+
+        {
+            let mut rpass = encoder.begin_render_pass(
+                &wgpu::RenderPassDescriptor {
+                    label: Some("RenderPass(Draw)"), 
                     color_attachments: &[
                         Some(wgpu::RenderPassColorAttachment {
                             view: &render_target_view, 
                             resolve_target: None, 
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), 
+                                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE), 
                                 store: wgpu::StoreOp::Store, 
-                            }, 
-                        }),
+                            },
+                        }), 
                     ],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &depth_stencil_view, 
@@ -286,15 +398,17 @@ fn render_loop(
             );
 
             rpass.set_pipeline(&color_pipeline);
-            rpass.set_bind_group(0, camera.bind_group_ref(), &[]);
+            rpass.set_bind_group(0, &camera.uniform_bind_group, &[]);
+            rpass.set_bind_group(2, &global_light.uniform_bind_group, &[]);
+            rpass.set_bind_group(3, &global_light.texture_bind_group, &[]);
 
             plane_mesh.bind(&mut rpass);
-            rpass.set_bind_group(1, plane.bind_group_ref(), &[]);
+            rpass.set_bind_group(1, &plane.uniform_bind_group, &[]);
             plane_mesh.draw(&mut rpass);
 
             cube_mesh_0.bind(&mut rpass);
             for object in cubes.iter() {
-                rpass.set_bind_group(1, object.bind_group_ref(), &[]);
+                rpass.set_bind_group(1, &object.uniform_bind_group, &[]);
                 cube_mesh_0.draw(&mut rpass);
             }
         }
