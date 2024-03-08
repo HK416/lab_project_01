@@ -1,5 +1,7 @@
 # Lab Project 01
 
+![preview image](./preview.jpeg)
+
 [한국어](#개요) </br>
 [English(Translation)](#overview) </br>
 
@@ -8,3 +10,4 @@
 
 # Overview
 Let's implement drawing a shadow of an object using the `Rust` language and `wgpu`. </br>
+
