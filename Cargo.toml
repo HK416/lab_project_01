@@ -18,4 +18,4 @@ crossbeam-queue = "0.3.*" # MIT or Apache-2.0 license.
 bytemuck = { version = "1.14.*", features = ["derive"] } # Zlib or Apache-2.0 or MIT license.
 glam = { version = "0.25.*", features = ["debug-glam-assert", "bytemuck", "scalar-math"] } # MIT or Apache-2.0 license.
 winit = "0.29.*" # Apache-2.0 license.
-wgpu = "0.19.*" # MIT or Apache-2.0 license. 
+wgpu = { version = "0.19.*", features = ["spirv"] } # MIT or Apache-2.0 license. 
